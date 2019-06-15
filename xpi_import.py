@@ -1,33 +1,3 @@
-#---------------------------------------------------------------------------
-#
-#  Import an X-Plane .obj file into Blender 2.78
-#
-# Dave Prue <dave.prue@lahar.net>
-#
-# MIT License
-#
-# Copyright (c) 2017 David C. Prue
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-#
-#---------------------------------------------------------------------------	
-
 import bpy
 import bmesh
 import mathutils
@@ -35,11 +5,12 @@ from mathutils import Vector
 import itertools
 import os
 
-class XPlaneImport(bpy.types.Operator):
+
+class XPI_OT_import(bpy.types.Operator):
     bl_label = "Import X-Plane OBJ"
     bl_idname = "import.xplane_obj"
 
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
 
     def execute(self, context):
         print("execute %s" % self.filepath)
@@ -58,10 +29,13 @@ class XPlaneImport(bpy.types.Operator):
         ob.show_name = False
 
         # Link object to scene and make active
-        scn = bpy.context.scene
-        scn.objects.link(ob)
-        scn.objects.active = ob
-        ob.select = True
+        # scn = bpy.context.scene
+        # scn.objects.link(ob)
+        coll = bpy.context.view_layer.active_layer_collection.collection
+        coll.objects.link(ob)
+        #scn.objects.active = ob
+        bpy.context.view_layer.objects.active = ob
+        ob.select_set(True)
         
         # Create mesh from given verts, faces.
         me.from_pydata(verts, [], faces)
@@ -70,7 +44,7 @@ class XPlaneImport(bpy.types.Operator):
         me.materials.append(material)
 
         # Assign the UV coordinates to each vertex
-        me.uv_textures.new(name="UVMap")
+        me.uv_layers.new(name="UVMap")
         me.uv_layers[-1].data.foreach_set("uv", [uv for pair in [vert_uvs[l.vertex_index] for l in me.loops] for uv in pair])
 
         # Assign the normals for each vertex
@@ -90,7 +64,7 @@ class XPlaneImport(bpy.types.Operator):
         bpy.ops.mesh.delete(type='VERT')
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        ob.select = False
+        ob.select_set(False)
 
         return ob
         
@@ -120,17 +94,23 @@ class XPlaneImport(bpy.types.Operator):
                 texfilename = line[1]
 
                 # Create and add a material
-                material = bpy.data.materials.new('Material')
+                material = bpy.data.materials.new(name='Material')
+                material.use_nodes = True
+                bsdf = material.node_tree.nodes["Principled BSDF"]
 
                 # Create texture
-                tex = bpy.data.textures.new('Texture', type = 'IMAGE')
+                #tex = bpy.data.textures.new('Texture', type = 'IMAGE')
+                #tex.image = bpy.data.images.load("%s\\%s" % (os.path.dirname(self.filepath), texfilename))
+                #tex.use_alpha = True
+
+                tex = material.node_tree.nodes.new(type='ShaderNodeTexImage')
                 tex.image = bpy.data.images.load("%s\\%s" % (os.path.dirname(self.filepath), texfilename))
-                tex.use_alpha = True
 
                 # Add Texture to the Material
-                mtex = material.texture_slots.add()
-                mtex.texture = tex
-                mtex.texture_coords = 'UV'
+                #mtex = material.texture_slots.add()
+                #mtex.texture = tex
+                #mtex.texture_coords = 'UV'
+                material.node_tree.links.new(bsdf.inputs['Base Color'], tex.outputs['Color'])
 
 
             if(line[0] == 'VT'):
